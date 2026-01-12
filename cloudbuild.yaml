@@ -1,0 +1,73 @@
+# Cloud Build configuration for Worker Service
+# Triggers on push to main branch of Worker Service repository
+
+steps:
+  # Build Worker Service Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build', 
+      '-t', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA',
+      '-t', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:latest',
+      '.'
+    ]
+    id: 'build-worker-service'
+
+  # Push Worker Service image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA']
+    id: 'push-worker-service'
+    waitFor: ['build-worker-service']
+
+  # Push latest tag
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:latest']
+    id: 'push-worker-service-latest'
+    waitFor: ['build-worker-service']
+
+  # Update Worker Service YAML with new image
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        sed -i "s|gcr.io/bni-prod-dma-bnimove-ai/document-processing-text-analysis-worker:latest|gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA|g" worker_service.yaml
+    id: 'update-worker-yaml'
+    waitFor: ['push-worker-service']
+
+  # Deploy Worker Service to Cloud Run
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run', 'services', 'replace', 'worker_service.yaml',
+      '--region=asia-southeast1'
+    ]
+    id: 'deploy-worker-service'
+    waitFor: ['update-worker-yaml']
+
+  # Update Pub/Sub subscription to point to new worker
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        WORKER_URL=$(gcloud run services describe document-processing-text-analysis-worker --region=asia-southeast1 --format="value(status.url)")
+        gcloud pubsub subscriptions modify-push-config document-processing-worker --push-endpoint="$${WORKER_URL}/process"
+    id: 'update-pubsub'
+    waitFor: ['deploy-worker-service']
+
+# Store images in Container Registry
+images:
+  - 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:latest'
+
+# Build configuration
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+
+# Timeout for the entire build
+timeout: '900s'
+
+# Substitutions for environment-specific deployments
+substitutions:
+  _REGION: 'asia-southeast1'
+  _SERVICE_ACCOUNT: 'document-processing-sa@bni-prod-dma-bnimove-ai.iam.gserviceaccount.com'
