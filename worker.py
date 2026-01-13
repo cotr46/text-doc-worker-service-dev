@@ -58,8 +58,8 @@ class UltraFastDocumentWorker:
 
         # HIGH-QUALITY processing configuration for consistent AI results
         class ProcessingConfig:
-            API_KEY = os.getenv("OPENWEBUI_API_KEY", "sk-c2facbdbf4daea4361a7685d091fdb8abf2")
-            BASE_URL = os.getenv("OPENWEBUI_BASE_URL", "https://nexus.bnimove.ai:3045/5754154.asia-south1")
+            API_KEY = os.getenv("OPENWEBUI_API_KEY", "sk-c2ebcb8d36aa4361a28560915d8ab6f2")
+            BASE_URL = os.getenv("OPENWEBUI_BASE_URL", "https://nexus-bnimove-369455734154.asia-southeast2.run.app")
             MODEL = os.getenv("OPENWEBUI_MODEL", "image-screening-shmshm-elektronik")
             
             # HARDCODED ULTRA-FAST SETTINGS - BYPASS ENV VAR ISSUES
