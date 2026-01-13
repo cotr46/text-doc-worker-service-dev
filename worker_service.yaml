@@ -23,13 +23,13 @@ spec:
         
     spec:
       # Service account for GCP permissions
-      serviceAccountName: document-processing-sa@bni-prod-dma-bnimove-ai.iam.gserviceaccount.com
+      serviceAccountName: 369455734154-compute@developer.gserviceaccount.com
       
       # Timeout for requests (max 60 minutes for Cloud Run)
       timeoutSeconds: 900
       
       containers:
-      - image: gcr.io/bni-prod-dma-bnimove-ai/document-processing-text-analysis-worker:latest
+      - image: asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/character-worker-service/character-worker-service@sha256:dcdda27227ed6769de96f44e8fe20f12f147945565adb08e120e71e1bff9d562
         
         ports:
         - containerPort: 8080
