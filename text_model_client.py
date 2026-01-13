@@ -66,7 +66,7 @@ class TextModelClient:
             logging.basicConfig(level=logging.INFO)
         
         # API endpoint
-        self.chat_endpoint = f"{self.base_url}/v1/chat/completions"
+        self.chat_endpoint = f"{self.base_url}/api/chat/completions"
         
         self.log(f"🤖 TextModelClient initialized")
         self.log(f"   - Base URL: {self.base_url}")
