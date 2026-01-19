@@ -392,7 +392,8 @@ class TextModelClient:
             "invalid model response",
             "failed to parse",
             "no choices returned",
-            "no message content"
+            "no message content",
+            "reasoning token limit"  # Model hit reasoning token limit - cannot be fixed by retry
         ]
         
         # Check if any non-retryable condition is present
