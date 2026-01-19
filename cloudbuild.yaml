@@ -6,58 +6,39 @@ steps:
   - name: 'gcr.io/cloud-builders/docker'
     args: [
       'build', 
-      '-t', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA',
-      '-t', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:latest',
+      '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:$COMMIT_SHA',
+      '-t', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:latest',
       '.'
     ]
     id: 'build-worker-service'
 
-  # Push Worker Service image
+  # Push Worker Service image with commit SHA
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA']
+    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:$COMMIT_SHA']
     id: 'push-worker-service'
     waitFor: ['build-worker-service']
 
   # Push latest tag
   - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:latest']
+    args: ['push', 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:latest']
     id: 'push-worker-service-latest'
     waitFor: ['build-worker-service']
 
-  # Update Worker Service YAML with new image
-  - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        sed -i "s|gcr.io/bni-prod-dma-bnimove-ai/document-processing-text-analysis-worker:latest|gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA|g" worker_service.yaml
-    id: 'update-worker-yaml'
-    waitFor: ['push-worker-service']
-
   # Deploy Worker Service to Cloud Run
-  - name: 'gcr.io/cloud-builders/gcloud'
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args: [
-      'run', 'services', 'replace', 'worker_service.yaml',
-      '--region=asia-southeast1'
+      'gcloud', 'run', 'deploy', 'text-doc-worker-service-dev',
+      '--image=asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:$COMMIT_SHA',
+      '--region=asia-southeast2',
+      '--platform=managed'
     ]
     id: 'deploy-worker-service'
-    waitFor: ['update-worker-yaml']
+    waitFor: ['push-worker-service']
 
-  # Update Pub/Sub subscription to point to new worker
-  - name: 'gcr.io/cloud-builders/gcloud'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        WORKER_URL=$(gcloud run services describe document-processing-text-analysis-worker --region=asia-southeast1 --format="value(status.url)")
-        gcloud pubsub subscriptions modify-push-config document-processing-worker --push-endpoint="$${WORKER_URL}/process"
-    id: 'update-pubsub'
-    waitFor: ['deploy-worker-service']
-
-# Store images in Container Registry
+# Store images in Artifact Registry
 images:
-  - 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:$COMMIT_SHA'
-  - 'gcr.io/$PROJECT_ID/document-processing-text-analysis-worker:latest'
+  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:$COMMIT_SHA'
+  - 'asia-southeast2-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/text-doc-worker-service:latest'
 
 # Build configuration
 options:
@@ -69,5 +50,5 @@ timeout: '900s'
 
 # Substitutions for environment-specific deployments
 substitutions:
-  _REGION: 'asia-southeast1'
+  _REGION: 'asia-southeast2'
   _SERVICE_ACCOUNT: 'document-processing-sa@bni-prod-dma-bnimove-ai.iam.gserviceaccount.com'
