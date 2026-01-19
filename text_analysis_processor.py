@@ -228,22 +228,22 @@ class TextAnalysisProcessor:
             self.log(f"   - Entity type: {entity_type}")
             self.log(f"   - Name: {name[:50]}..." if len(name) > 50 else f"   - Name: {name}")
             
-            # Format the analysis prompt using the model client
-            prompt = self.model_client.format_analysis_request(
-                name=name,
-                analysis_type=analysis_type,
-                entity_type=entity_type,
-                additional_context=additional_context
-            )
+            # CRITICAL: Use simple prompt (just the name) to match direct Nexus API call
+            # This ensures consistent results between worker and direct API calls
+            prompt = name
             
+            self.log(f"   - Using simple prompt: '{prompt}'")
+            self.log(f"   - Enabling web_search_with_google tool")
+
             # Call the model using the client
-            # Use temperature=1 for PEP model (doesn't support 0.1)
-            temperature = 1.0 if "pep" in model_name.lower() or "politically" in model_name.lower() else 0.1
+            # IMPORTANT: Do NOT set temperature - let model use its default
+            # IMPORTANT: Enable web_search_with_google tool for real-time data
             response = self.model_client.call_model(
                 model_name=model_name,
                 prompt=prompt,
-                temperature=temperature,  # Low temperature for consistent results
+                tool_ids=["web_search_with_google"],  # Enable web search for all text analysis models
                 max_tokens=2000
+                # Note: temperature not set - uses model default
             )
             
             self.log(f"âœ… Model response received via client")

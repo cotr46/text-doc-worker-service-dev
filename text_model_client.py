@@ -1,4 +1,4 @@
-"""
+﻿"""
 Text Analysis Model Client for handling HTTP requests to text-based AI models
 Provides authentication, request formatting, response processing, and error handling with retry logic
 """
@@ -93,9 +93,10 @@ class TextModelClient:
             model_name: Name of the AI model to call
             prompt: Text prompt to send to the model
             **kwargs: Additional parameters for the model call
-                - temperature: Model temperature (default: 0.1)
+                - temperature: Model temperature (optional, uses model default if not specified)
                 - max_tokens: Maximum tokens to generate (default: 2000)
                 - stream: Whether to stream response (default: False)
+                - tool_ids: List of tool IDs to enable (e.g., ["web_search_with_google"])
         
         Returns:
             ModelResponse object with structured response data
@@ -158,10 +159,17 @@ class TextModelClient:
                         "content": prompt
                     }
                 ],
-                "temperature": kwargs.get("temperature", 0.1),
                 "max_tokens": kwargs.get("max_tokens", 2000),
                 "stream": kwargs.get("stream", False)
             }
+            
+            # Add temperature only if specified (let model use default otherwise)
+            if "temperature" in kwargs:
+                payload["temperature"] = kwargs["temperature"]
+            
+            # Add tool_ids if specified (for web search, etc.)
+            if "tool_ids" in kwargs and kwargs["tool_ids"]:
+                payload["tool_ids"] = kwargs["tool_ids"]
             
             # Prepare headers
             headers = {
@@ -174,7 +182,7 @@ class TextModelClient:
                 self.log(f"📤 Calling model: {model_name}")
                 self.log(f"   - Endpoint: {self.chat_endpoint}")
                 self.log(f"   - Prompt length: {len(prompt)} characters")
-                self.log(f"   - Temperature: {payload['temperature']}")
+                self.log(f"   - Temperature: {payload.get('temperature', 'default')}")
                 self.log(f"   - Max tokens: {payload['max_tokens']}")
             else:
                 self.log(f"📤 Retry attempt {attempt + 1} for model: {model_name}")
