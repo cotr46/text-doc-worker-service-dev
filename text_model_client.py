@@ -159,12 +159,18 @@ class TextModelClient:
                         "content": prompt
                     }
                 ],
-                "temperature": kwargs.get("temperature", 0.1),
-                "max_tokens": kwargs.get("max_tokens", 2000),
                 "stream": kwargs.get("stream", False),
                 # CRITICAL: Add tool_ids for web search capability
                 "tool_ids": kwargs.get("tool_ids", ["web_search_with_google"])
             }
+            
+            # Add temperature only if explicitly provided (let model use default)
+            if "temperature" in kwargs:
+                payload["temperature"] = kwargs["temperature"]
+            
+            # Add max_tokens only if explicitly provided (avoid truncation)
+            if "max_tokens" in kwargs:
+                payload["max_tokens"] = kwargs["max_tokens"]
             
             # Prepare headers
             headers = {

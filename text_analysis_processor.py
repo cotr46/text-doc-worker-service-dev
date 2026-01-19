@@ -245,9 +245,9 @@ class TextAnalysisProcessor:
             response = self.model_client.call_model(
                 model_name=model_name,
                 prompt=prompt,
-                temperature=0.1,  # Low temperature for consistent results
-                max_tokens=2000,
                 tool_ids=["web_search_with_google"]  # CRITICAL: Enable web search for PEP analysis
+                # Note: Not setting temperature or max_tokens - let model use defaults
+                # This matches the successful direct Nexus API calls
             )
             
             self.log(f"✅ Model response received via client")
