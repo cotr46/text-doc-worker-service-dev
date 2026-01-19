@@ -129,12 +129,10 @@ class TextAnalysisProcessor:
                 self.log_error(job_id, "COMPATIBILITY_ERROR", error_msg)
                 raise ValueError(error_msg)
             
-            # Check model availability before processing
+            # Get model name from config
+            # NOTE: Removed model availability check to avoid wasting reasoning token quota
+            # The actual call will fail with proper error if model is unavailable
             model_name = model_config["model"]
-            if not self.check_model_availability(model_name):
-                error_msg = f"Model '{model_name}' is currently unavailable"
-                self.log_error(job_id, "MODEL_UNAVAILABLE", error_msg)
-                raise Exception(error_msg)
             
             # Call AI model for analysis with retry logic
             self.log(f"🤖 Calling AI model: {model_name}")
