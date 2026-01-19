@@ -1,0 +1,154 @@
+# Cloud Run service configuration for Worker Service
+# To deploy: gcloud run services replace worker-service.yaml
+
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: text-doc-worker-service
+  annotations:
+    run.googleapis.com/ingress: all
+    run.googleapis.com/execution-environment: gen2
+spec:
+  template:
+    metadata:
+      annotations:
+        # CPU and memory allocation
+        run.googleapis.com/cpu-throttling: "false"
+        run.googleapis.com/memory: "4Gi"
+        run.googleapis.com/cpu: "2"
+        
+        # Scaling configuration
+        autoscaling.knative.dev/minScale: "1"
+        autoscaling.knative.dev/maxScale: "10"
+        
+    spec:
+      # Service account for GCP permissions
+      serviceAccountName: 369455734154-compute@developer.gserviceaccount.com
+      
+      # Timeout for requests (max 60 minutes for Cloud Run)
+      timeoutSeconds: 900
+      
+      containers:
+      - image: asia-southeast2-docker.pkg.dev/bni-prod-dma-bnimove-ai/cloud-run-source-deploy/character-worker-service/character-worker-service@sha256:dcdda27227ed6769de96f44e8fe20f12f147945565adb08e120e71e1bff9d562
+        
+        ports:
+        - containerPort: 8080
+          name: http1
+        
+        # Environment variables
+        env:
+        # Core Infrastructure
+        - name: GOOGLE_CLOUD_PROJECT
+          value: "bni-prod-dma-bnimove-ai"
+        - name: GCS_BUCKET_NAME
+          value: "sbp-wrapper-bucket"
+        - name: PUBSUB_TOPIC
+          value: "document-processing-request"
+        - name: PUBSUB_SUBSCRIPTION
+          value: "document-processing-worker"
+        - name: FIRESTORE_DATABASE
+          value: "document-processing-firestore"
+        - name: PORT
+          value: "8080"
+        
+        # Text Analysis Configuration
+        - name: TEXT_ANALYSIS_ENABLED
+          value: "true"
+        - name: TEXT_MODEL_PEP_ANALYSIS
+          value: "politically-exposed-person-v2"
+        - name: TEXT_MODEL_NEGATIVE_NEWS
+          value: "negative-news"
+        - name: TEXT_MODEL_LAW_INVOLVEMENT
+          value: "law-involvement"
+        - name: TEXT_MODEL_CORPORATE_NEGATIVE_NEWS
+          value: "negative-news-corporate"
+        - name: TEXT_MODEL_CORPORATE_LAW_INVOLVEMENT
+          value: "law-involvement-corporate"
+        
+        # Text Analysis Model Endpoints (FIXED - REMOVED /api SUFFIX)
+        - name: OPENWEBUI_BASE_URL
+          value: "https://nexus-bnimove-369455734154.asia-southeast2.run.app"
+        - name: OPENWEBUI_API_KEY
+          value: "sk-c2ebcb8d36aa4361a28560915d8ab6f2"
+        - name: TEXT_MODEL_TIMEOUT_SECONDS
+          value: "30"
+        - name: TEXT_MODEL_RETRY_ATTEMPTS
+          value: "3"
+        - name: TEXT_MODEL_RETRY_DELAY_SECONDS
+          value: "1"
+        
+        # Worker Configuration
+        - name: MAX_WORKERS
+          value: "3"
+        - name: MAX_CONCURRENT_CHUNKS
+          value: "2"
+        - name: MIN_DELAY_SECONDS
+          value: "30"
+        - name: CHUNK_SIZE
+          value: "2"
+        - name: TIMEOUT_SECONDS
+          value: "120"
+        
+        # Document Processing Configuration
+        - name: BASE_IMAGE_QUALITY
+          value: "95"
+        - name: MIN_IMAGE_QUALITY
+          value: "90"
+        - name: MAX_IMAGE_SIZE_KB
+          value: "2000"
+        - name: PDF_DPI
+          value: "200"
+        - name: MAX_IMAGE_DIMENSION
+          value: "2048"
+        - name: MIN_IMAGE_DIMENSION
+          value: "800"
+        - name: PRESERVE_ORIGINAL_QUALITY
+          value: "true"
+        
+        # Security Configuration
+        - name: AUDIT_SENSITIVE_OPERATIONS
+          value: "true"
+        - name: SECURITY_VALIDATION_ENABLED
+          value: "true"
+        
+        # Monitoring and Observability
+        - name: ENABLE_METRICS
+          value: "true"
+        - name: LOG_LEVEL
+          value: "INFO"
+        - name: METRICS_RETENTION_HOURS
+          value: "24"
+        - name: HEALTH_CHECK_INTERVAL_SECONDS
+          value: "300"
+        
+        # Resource limits
+        resources:
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+        
+        # Health checks
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 60
+          timeoutSeconds: 10
+          failureThreshold: 3
+        
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+  
+  traffic:
+  - percent: 100
+    latestRevision: true
