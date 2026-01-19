@@ -1,4 +1,4 @@
-﻿"""
+"""
 Text Analysis Processor for handling text-based analysis models
 Supports person and corporate name analysis for PEP, negative news, and law involvement
 """
@@ -59,7 +59,7 @@ class TextAnalysisProcessor:
             }
         }
         
-        self.log("ðŸš€ TextAnalysisProcessor initialized")
+        self.log("🚀 TextAnalysisProcessor initialized")
         self.log(f"   - Base URL: {self.base_url}")
         self.log(f"   - Timeout: {self.timeout_seconds}s")
         self.log(f"   - Available models: {list(self.text_model_config.keys())}")
@@ -97,7 +97,7 @@ class TextAnalysisProcessor:
         name = job_data.get("name")
         additional_context = job_data.get("additional_context")
         
-        self.log(f"ðŸ” Processing text analysis job {job_id}")
+        self.log(f"🔍 Processing text analysis job {job_id}")
         self.log(f"   - Analysis type: {analysis_type}")
         self.log(f"   - Entity type: {entity_type}")
         self.log(f"   - Name: {name[:50]}..." if name and len(name) > 50 else f"   - Name: {name}")
@@ -127,12 +127,17 @@ class TextAnalysisProcessor:
                 supported_entities = model_config["entity_types"]
                 error_msg = f"Entity type '{entity_type}' not supported for '{analysis_type}'. Supported: {supported_entities}"
                 self.log_error(job_id, "COMPATIBILITY_ERROR", error_msg)
-                raise ValueError(error_msg)            # Model availability check removed - model confirmed working via Postman
-            # Direct call to model for better performance and reliability
+                raise ValueError(error_msg)
+            
+            # Check model availability before processing
             model_name = model_config["model"]
+            if not self.check_model_availability(model_name):
+                error_msg = f"Model '{model_name}' is currently unavailable"
+                self.log_error(job_id, "MODEL_UNAVAILABLE", error_msg)
+                raise Exception(error_msg)
             
             # Call AI model for analysis with retry logic
-            self.log(f"ðŸ¤– Calling AI model: {model_name}")
+            self.log(f"🤖 Calling AI model: {model_name}")
             
             try:
                 analysis_result = self.call_text_analysis_model(
@@ -170,7 +175,7 @@ class TextAnalysisProcessor:
             
             processing_time = time.time() - start_time
             
-            self.log(f"âœ… Text analysis completed for job {job_id} in {processing_time:.2f}s")
+            self.log(f"✅ Text analysis completed for job {job_id} in {processing_time:.2f}s")
             self.log_success(job_id, processing_time, model_name, analysis_type)
             
             return {
@@ -186,8 +191,8 @@ class TextAnalysisProcessor:
         except Exception as e:
             processing_time = time.time() - start_time
             error_msg = f"Text analysis failed for job {job_id}: {str(e)}"
-            self.log(f"âŒ {error_msg}")
-            self.log(f"âŒ Traceback: {traceback.format_exc()}")
+            self.log(f"❌ {error_msg}")
+            self.log(f"❌ Traceback: {traceback.format_exc()}")
             
             # Log structured error for monitoring
             self.log_error(job_id, "PROCESSING_ERROR", error_msg, {
@@ -223,33 +228,33 @@ class TextAnalysisProcessor:
             Raw response from AI model
         """
         try:
-            self.log(f"ðŸ“¤ Calling model via client: {model_name}")
+            self.log(f"📤 Calling model via client: {model_name}")
             self.log(f"   - Analysis type: {analysis_type}")
             self.log(f"   - Entity type: {entity_type}")
             self.log(f"   - Name: {name[:50]}..." if len(name) > 50 else f"   - Name: {name}")
             
-            # CRITICAL: Use simple prompt (just the name) to match direct Nexus API call
-            # This ensures consistent results between worker and direct API calls
-            prompt = name
+            # Format the analysis prompt using the model client
+            prompt = self.model_client.format_analysis_request(
+                name=name,
+                analysis_type=analysis_type,
+                entity_type=entity_type,
+                additional_context=additional_context
+            )
             
-            self.log(f"   - Using simple prompt: '{prompt}'")
-            self.log(f"   - Enabling web_search_with_google tool")
-
-            # Call the model using the client
-            # IMPORTANT: Do NOT set temperature - let model use its default
-            # IMPORTANT: Enable web_search_with_google tool for real-time data
+            # Call the model using the client with web search tool
             response = self.model_client.call_model(
                 model_name=model_name,
                 prompt=prompt,
-                tool_ids=["web_search_with_google"],  # Enable web search for all text analysis models
-                max_tokens=2000
-                # Note: temperature not set - uses model default
+                temperature=0.1,  # Low temperature for consistent results
+                max_tokens=2000,
+                tool_ids=["web_search_with_google"]  # CRITICAL: Enable web search for PEP analysis
             )
             
-            self.log(f"âœ… Model response received via client")
+            self.log(f"✅ Model response received via client")
             self.log(f"   - Response time: {response.response_time:.2f}s")
             self.log(f"   - Content length: {len(response.content)} characters")
             self.log(f"   - Usage: {response.usage}")
+            self.log(f"   - Sources: {len(response.sources) if response.sources else 0}")
             
             return {
                 "content": response.content,
@@ -257,12 +262,13 @@ class TextAnalysisProcessor:
                 "usage": response.usage,
                 "response_time": response.response_time,
                 "status_code": response.status_code,
-                "raw_response": response.raw_response
+                "raw_response": response.raw_response,
+                "sources": response.sources  # Include sources from web search
             }
             
         except Exception as e:
             error_msg = f"Model client call failed: {str(e)}"
-            self.log(f"âŒ {error_msg}")
+            self.log(f"❌ {error_msg}")
             raise Exception(error_msg)
 
     def format_analysis_result(self, analysis_result: Dict, analysis_type: str, entity_type: str, 
@@ -284,8 +290,27 @@ class TextAnalysisProcessor:
             # Extract content from model response
             content = analysis_result.get("content", "")
             
+            # Extract sources from tool execution (web search results)
+            api_sources = analysis_result.get("sources", [])
+            
+            # Log raw response for debugging
+            self.log(f"📄 Raw response length: {len(content)} characters")
+            if len(content) > 0:
+                self.log(f"📄 Raw response preview: {content[:200]}...")
+            
+            # Log sources from API
+            if api_sources:
+                self.log(f"📚 API returned {len(api_sources)} source(s) from web search")
+            
             # Try to parse JSON from the content
             parsed_result = self.extract_json_from_content(content)
+            
+            # Log parsed result
+            if parsed_result:
+                self.log(f"✅ Successfully parsed JSON result")
+                self.log(f"   - Keys: {list(parsed_result.keys())}")
+            else:
+                self.log(f"⚠️ No JSON found in response")
             
             # Create standardized result structure
             formatted_result = {
@@ -298,7 +323,7 @@ class TextAnalysisProcessor:
                     "status": self.extract_status(parsed_result, analysis_type),
                     "summary": self.extract_summary(parsed_result),
                     "details": self.extract_details(parsed_result),
-                    "sources": self.extract_sources(parsed_result),
+                    "sources": self.extract_sources(parsed_result, api_sources),
                     "last_updated": datetime.now(timezone.utc).isoformat()
                 },
                 "metadata": {
@@ -307,14 +332,14 @@ class TextAnalysisProcessor:
                     "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
                     "usage": analysis_result.get("usage", {})
                 },
-                "raw_response": content,  # Include raw response for debugging
-                    "parsed_result": parsed_result  # Include parsed result
+                "parsed_result": parsed_result,  # Include parsed result for debugging
+                "raw_response": content  # Include raw response for debugging
             }
             
             return formatted_result
             
         except Exception as e:
-            self.log(f"âš ï¸ Error formatting result, using fallback: {str(e)}")
+            self.log(f"⚠️ Error formatting result, using fallback: {str(e)}")
             
             # Fallback formatting
             return {
@@ -326,7 +351,7 @@ class TextAnalysisProcessor:
                 "findings": {
                     "status": "unknown",
                     "summary": "Analysis completed but result formatting failed",
-                    "details": [{"error": "Result formatting failed", "raw_content": content[:500]}],
+                    "details": [{"error": "Result formatting failed", "raw_content": content[:500] if content else "No content"}],
                     "sources": [],
                     "last_updated": datetime.now(timezone.utc).isoformat()
                 },
@@ -336,16 +361,13 @@ class TextAnalysisProcessor:
                     "analysis_timestamp": datetime.now(timezone.utc).isoformat(),
                     "formatting_error": str(e)
                 },
-                "raw_response": content
+                "parsed_result": {},
+                "raw_response": content if content else ""
             }
 
     def extract_json_from_content(self, content: str) -> Dict:
         """Extract JSON data from model response content"""
         try:
-            # Log content for debugging
-            self.log(f"ðŸ“„ Extracting JSON from content (length: {len(content)} chars)")
-            if len(content) > 0:
-                self.log(f"   Preview: {content[:200]}")
             # Try to parse the entire content as JSON
             return json.loads(content)
         except json.JSONDecodeError:
@@ -438,10 +460,32 @@ class TextAnalysisProcessor:
         
         return details
 
-    def extract_sources(self, parsed_result: Dict) -> List[str]:
-        """Extract sources from parsed result"""
+    def extract_sources(self, parsed_result: Dict, api_sources: List[Dict] = None) -> List[str]:
+        """
+        Extract sources from parsed result and API sources
+        
+        Args:
+            parsed_result: Parsed JSON from model content
+            api_sources: Sources from API response (web search results)
+            
+        Returns:
+            List of source URLs
+        """
         sources = []
         
+        # First, extract sources from API response (web search results)
+        if api_sources:
+            for source_item in api_sources:
+                # Extract URLs from search results
+                documents = source_item.get("document", [])
+                for doc in documents:
+                    if isinstance(doc, str):
+                        # Parse URLs from search results text
+                        import re
+                        urls = re.findall(r'URL: (https?://[^\s\n]+)', doc)
+                        sources.extend(urls)
+        
+        # Then, extract sources from parsed result (model's own sources)
         source_fields = ["sources", "references", "links", "urls"]
         
         for field in source_fields:
@@ -449,11 +493,23 @@ class TextAnalysisProcessor:
                 field_data = parsed_result[field]
                 
                 if isinstance(field_data, list):
-                    sources.extend([str(item) for item in field_data if item])
+                    for item in field_data:
+                        if isinstance(item, dict) and "url" in item:
+                            sources.append(str(item["url"]))
+                        elif isinstance(item, str):
+                            sources.append(item)
                 elif field_data:
                     sources.append(str(field_data))
         
-        return sources
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_sources = []
+        for source in sources:
+            if source not in seen:
+                seen.add(source)
+                unique_sources.append(source)
+        
+        return unique_sources
 
     def check_model_availability(self, model_name: str) -> bool:
         """
@@ -468,7 +524,7 @@ class TextAnalysisProcessor:
         try:
             return self.model_client.validate_model_availability(model_name)
         except Exception as e:
-            self.log(f"âŒ Error checking model availability for {model_name}: {str(e)}")
+            self.log(f"❌ Error checking model availability for {model_name}: {str(e)}")
             return False
     
     def get_available_models(self) -> Dict[str, bool]:
@@ -508,10 +564,10 @@ class TextAnalysisProcessor:
             error_log["context"] = context
         
         # Log as structured JSON for monitoring systems
-        self.log(f"ðŸš¨ ERROR: {json.dumps(error_log)}")
+        self.log(f"🚨 ERROR: {json.dumps(error_log)}")
         
         # Also log human-readable format
-        self.log(f"âŒ [{error_type}] Job {job_id}: {error_message}")
+        self.log(f"❌ [{error_type}] Job {job_id}: {error_message}")
     
     def log_success(self, job_id: str, processing_time: float, model_name: str, analysis_type: str) -> None:
         """
@@ -536,7 +592,7 @@ class TextAnalysisProcessor:
         }
         
         # Log as structured JSON for monitoring systems
-        self.log(f"âœ… SUCCESS: {json.dumps(success_log)}")
+        self.log(f"✅ SUCCESS: {json.dumps(success_log)}")
     
     def get_error_statistics(self) -> Dict[str, Any]:
         """
@@ -553,5 +609,3 @@ class TextAnalysisProcessor:
             "configured_analysis_types": list(self.text_model_config.keys()),
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
-
-

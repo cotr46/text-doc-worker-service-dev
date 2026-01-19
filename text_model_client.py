@@ -1,4 +1,4 @@
-﻿"""
+"""
 Text Analysis Model Client for handling HTTP requests to text-based AI models
 Provides authentication, request formatting, response processing, and error handling with retry logic
 """
@@ -22,6 +22,7 @@ class ModelResponse:
     response_time: float
     status_code: int
     raw_response: Dict[str, Any]
+    sources: List[Dict[str, Any]] = None  # Sources from tool execution (e.g., web search results)
 
 
 class TextModelClient:
@@ -93,10 +94,9 @@ class TextModelClient:
             model_name: Name of the AI model to call
             prompt: Text prompt to send to the model
             **kwargs: Additional parameters for the model call
-                - temperature: Model temperature (optional, uses model default if not specified)
+                - temperature: Model temperature (default: 0.1)
                 - max_tokens: Maximum tokens to generate (default: 2000)
                 - stream: Whether to stream response (default: False)
-                - tool_ids: List of tool IDs to enable (e.g., ["web_search_with_google"])
         
         Returns:
             ModelResponse object with structured response data
@@ -159,17 +159,12 @@ class TextModelClient:
                         "content": prompt
                     }
                 ],
+                "temperature": kwargs.get("temperature", 0.1),
                 "max_tokens": kwargs.get("max_tokens", 2000),
-                "stream": kwargs.get("stream", False)
+                "stream": kwargs.get("stream", False),
+                # CRITICAL: Add tool_ids for web search capability
+                "tool_ids": kwargs.get("tool_ids", ["web_search_with_google"])
             }
-            
-            # Add temperature only if specified (let model use default otherwise)
-            if "temperature" in kwargs:
-                payload["temperature"] = kwargs["temperature"]
-            
-            # Add tool_ids if specified (for web search, etc.)
-            if "tool_ids" in kwargs and kwargs["tool_ids"]:
-                payload["tool_ids"] = kwargs["tool_ids"]
             
             # Prepare headers
             headers = {
@@ -182,8 +177,9 @@ class TextModelClient:
                 self.log(f"📤 Calling model: {model_name}")
                 self.log(f"   - Endpoint: {self.chat_endpoint}")
                 self.log(f"   - Prompt length: {len(prompt)} characters")
-                self.log(f"   - Temperature: {payload.get('temperature', 'default')}")
+                self.log(f"   - Temperature: {payload['temperature']}")
                 self.log(f"   - Max tokens: {payload['max_tokens']}")
+                self.log(f"   - Tool IDs: {payload.get('tool_ids', 'None')}")
             else:
                 self.log(f"📤 Retry attempt {attempt + 1} for model: {model_name}")
             
@@ -224,6 +220,14 @@ class TextModelClient:
                 self.log(f"❌ {error_msg}")
                 raise Exception(error_msg)
             
+            # Extract sources if present (from tool execution)
+            sources = response_data.get("sources", [])
+            if sources:
+                self.log(f"📚 Found {len(sources)} source(s) from tool execution")
+                for i, source in enumerate(sources[:3]):  # Log first 3 sources
+                    source_name = source.get("source", {}).get("name", "unknown")
+                    self.log(f"   - Source {i+1}: {source_name}")
+            
             # Validate response structure
             if "choices" not in response_data or not response_data["choices"]:
                 error_msg = f"Invalid model response: no choices returned. Response: {json.dumps(response_data)[:200]}"
@@ -232,12 +236,33 @@ class TextModelClient:
             
             # Extract content from response
             choice = response_data["choices"][0]
-            if "message" not in choice or "content" not in choice["message"]:
-                error_msg = f"Invalid model response: no message content. Choice: {json.dumps(choice)[:200]}"
+            if "message" not in choice:
+                error_msg = f"Invalid model response: no message in choice. Choice: {json.dumps(choice)[:200]}"
                 self.log(f"❌ {error_msg}")
                 raise Exception(error_msg)
             
-            content = choice["message"]["content"]
+            message = choice["message"]
+            
+            # Check for tool_calls (function calling scenario)
+            if "tool_calls" in message and message["tool_calls"]:
+                self.log(f"⚠️ Model returned tool_calls (function calling mode)")
+                self.log(f"   - Tool calls count: {len(message['tool_calls'])}")
+                for i, tool_call in enumerate(message["tool_calls"]):
+                    self.log(f"   - Tool {i+1}: {tool_call.get('function', {}).get('name', 'unknown')}")
+                # For now, log warning - this needs multi-turn conversation to handle properly
+                self.log(f"⚠️ WARNING: Tool calls require multi-turn conversation - not yet implemented")
+            
+            # Get content (might be empty if tool_calls present)
+            content = message.get("content", "")
+            
+            # Log if content is empty
+            if not content or content == "":
+                self.log(f"⚠️ WARNING: Model returned empty content")
+                self.log(f"   - Message keys: {list(message.keys())}")
+                self.log(f"   - Finish reason: {choice.get('finish_reason', 'unknown')}")
+                if "tool_calls" not in message:
+                    self.log(f"   - No tool_calls found - this is unexpected!")
+            
             usage = response_data.get("usage", {})
             
             if attempt == 0:
@@ -254,7 +279,8 @@ class TextModelClient:
                 usage=usage,
                 response_time=response_time,
                 status_code=response.status_code,
-                raw_response=response_data
+                raw_response=response_data,
+                sources=sources  # Include sources from tool execution
             )
             
         except requests.exceptions.Timeout:
