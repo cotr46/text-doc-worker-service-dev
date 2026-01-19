@@ -126,7 +126,7 @@ class UltraFastDocumentWorker:
         self.text_processor_config = {
             "api_key": ProcessingConfig.API_KEY,
             "base_url": ProcessingConfig.BASE_URL,
-            "timeout_seconds": ProcessingConfig.TIMEOUT_SECONDS,
+            "timeout_seconds": 180,  # 3 minutes for reasoning models (they take 90-120s)
             "enable_logging": True,
             # Retry configuration for model integration
             "max_retries": 3,
