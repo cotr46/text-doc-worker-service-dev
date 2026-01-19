@@ -131,10 +131,12 @@ class TextAnalysisProcessor:
             
             # Check model availability before processing
             model_name = model_config["model"]
-            if not self.check_model_availability(model_name):
-                error_msg = f"Model '{model_name}' is currently unavailable"
-                self.log_error(job_id, "MODEL_UNAVAILABLE", error_msg)
-                raise Exception(error_msg)
+            # DISABLED: Availability check causes unnecessary delays and false negatives
+            # The model will be called anyway, and we'll handle errors if it's unavailable
+            # if not self.check_model_availability(model_name):
+            #     error_msg = f"Model '{model_name}' is currently unavailable"
+            #     self.log_error(job_id, "MODEL_UNAVAILABLE", error_msg)
+            #     raise Exception(error_msg)
             
             # Call AI model for analysis with retry logic
             self.log(f"🤖 Calling AI model: {model_name}")
