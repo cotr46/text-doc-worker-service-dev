@@ -231,21 +231,16 @@ class TextAnalysisProcessor:
             self.log(f"   - Entity type: {entity_type}")
             self.log(f"   - Name: {name[:50]}..." if len(name) > 50 else f"   - Name: {name}")
             
-            # Format the analysis prompt using the model client
-            prompt = self.model_client.format_analysis_request(
-                name=name,
-                analysis_type=analysis_type,
-                entity_type=entity_type,
-                additional_context=additional_context
-            )
+            # VANILLA CALL: Just send the name, Nexus model has its own system prompt
+            # All orchestration and configuration is handled by Nexus
+            prompt = name
+            if additional_context:
+                prompt = f"{name}\n\nAdditional context: {additional_context}"
             
-            # Call the model using the client
-            # NOTE: Don't pass temperature/max_tokens - reasoning models don't support them
-            # Let the model use its default settings
+            # Call the model using the client - vanilla call, no extra parameters
             response = self.model_client.call_model(
                 model_name=model_name,
                 prompt=prompt
-                # temperature and max_tokens removed - reasoning models use defaults
             )
             
             self.log(f"✅ Model response received via client")
