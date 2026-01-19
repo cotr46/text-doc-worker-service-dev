@@ -164,12 +164,14 @@ class TextModelClient:
                 "tool_ids": kwargs.get("tool_ids", ["web_search_with_google"])
             }
             
-            # Add temperature only if explicitly provided (let model use default)
-            if "temperature" in kwargs:
+            # CRITICAL: Only add temperature if explicitly provided AND not None
+            # Some models (like reasoning models) don't support custom temperature
+            if "temperature" in kwargs and kwargs["temperature"] is not None:
                 payload["temperature"] = kwargs["temperature"]
             
-            # Add max_tokens only if explicitly provided (avoid truncation)
-            if "max_tokens" in kwargs:
+            # CRITICAL: Only add max_tokens if explicitly provided AND not None
+            # Avoid truncation by letting model use its default
+            if "max_tokens" in kwargs and kwargs["max_tokens"] is not None:
                 payload["max_tokens"] = kwargs["max_tokens"]
             
             # Prepare headers
@@ -183,8 +185,8 @@ class TextModelClient:
                 self.log(f"📤 Calling model: {model_name}")
                 self.log(f"   - Endpoint: {self.chat_endpoint}")
                 self.log(f"   - Prompt length: {len(prompt)} characters")
-                self.log(f"   - Temperature: {payload['temperature']}")
-                self.log(f"   - Max tokens: {payload['max_tokens']}")
+                self.log(f"   - Temperature: {payload.get('temperature', 'default')}")
+                self.log(f"   - Max tokens: {payload.get('max_tokens', 'default')}")
                 self.log(f"   - Tool IDs: {payload.get('tool_ids', 'None')}")
             else:
                 self.log(f"📤 Retry attempt {attempt + 1} for model: {model_name}")
