@@ -39,7 +39,7 @@ class TextModelClient:
             config: Configuration dictionary with keys:
                 - api_key: API key for authentication
                 - base_url: Base URL for the model API
-                - timeout_seconds: Request timeout in seconds
+                - timeout_seconds: Request timeout in seconds (default: 180 for reasoning models)
                 - enable_logging: Whether to enable logging
                 - max_retries: Maximum number of retry attempts (default: 3)
                 - retry_delay: Base delay between retries in seconds (default: 1)
@@ -47,7 +47,8 @@ class TextModelClient:
         """
         self.api_key = config.get("api_key")
         self.base_url = config.get("base_url")
-        self.timeout_seconds = config.get("timeout_seconds", 60)
+        # Default timeout 180 seconds (3 minutes) for reasoning models that can take 90-120s
+        self.timeout_seconds = config.get("timeout_seconds", 180)
         self.enable_logging = config.get("enable_logging", True)
         
         # Retry configuration
