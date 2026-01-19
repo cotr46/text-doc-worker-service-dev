@@ -170,11 +170,10 @@ class TextAnalysisProcessor:
                 additional_context=additional_context
             )
             
-            # Call model
+            # Call model (no temperature parameter - model doesn't support it)
             response = self.model_client.call_model(
                 model_name=model_name,
                 prompt=prompt,
-                temperature=0.1,
                 max_tokens=2000
             )
             

@@ -8,6 +8,7 @@ import json
 import time
 import traceback
 import threading
+import base64
 from datetime import datetime, timezone
 from typing import Dict, Any
 from concurrent.futures import ThreadPoolExecutor
@@ -22,7 +23,7 @@ from text_analysis_processor import TextAnalysisProcessor
 from text_analysis_worker_metrics import text_analysis_worker_metrics
 
 # FastAPI for health check endpoint
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 import uvicorn
 
 
@@ -312,7 +313,6 @@ async def startup_event():
     worker = TextAnalysisWorker()
     
     # Start subscriber in background thread
-    import threading
     def run_subscriber():
         try:
             streaming_pull_future = worker.start_subscriber()
@@ -363,6 +363,71 @@ async def metrics():
         "processing_metrics": text_analysis_worker_metrics.get_worker_metrics(),
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
+
+
+@app.post("/process")
+async def process_pubsub_push(request: Dict[str, Any]):
+    """
+    Handle Pub/Sub push messages
+    This endpoint receives messages pushed from Pub/Sub subscription
+    """
+    if worker is None:
+        raise HTTPException(status_code=503, detail="Worker not initialized")
+    
+    try:
+        # Extract message from Pub/Sub push format
+        message = request.get("message", {})
+        message_data = message.get("data", "")
+        
+        if not message_data:
+            print("⚠️ Empty message data received")
+            return {"status": "ok", "message": "Empty message ignored"}
+        
+        # Decode base64 message data
+        decoded_data = base64.b64decode(message_data).decode("utf-8")
+        job_data = json.loads(decoded_data)
+        
+        job_id = job_data.get("job_id", "unknown")
+        job_type = job_data.get("job_type", "text_analysis")
+        
+        print(f"📨 Received push message for job: {job_id} (type: {job_type})")
+        
+        # Track active job
+        with worker.active_jobs_lock:
+            worker.active_jobs[job_id] = {
+                "start_time": datetime.now(timezone.utc),
+                "job_type": job_type
+            }
+        
+        try:
+            # Validate job type
+            if job_type != "text_analysis":
+                error_msg = f"Invalid job type: {job_type}. Expected: text_analysis"
+                print(f"❌ {error_msg}")
+                worker.update_job_status(job_id, "failed", error=error_msg)
+                return {"status": "ok", "message": error_msg}
+            
+            # Process the job
+            result = worker.process_text_analysis_job(job_data)
+            
+            return {
+                "status": "ok",
+                "job_id": job_id,
+                "success": result.get("success", False)
+            }
+            
+        finally:
+            # Remove from active jobs
+            with worker.active_jobs_lock:
+                worker.active_jobs.pop(job_id, None)
+        
+    except json.JSONDecodeError as e:
+        print(f"❌ Failed to parse message JSON: {e}")
+        return {"status": "ok", "message": f"Invalid JSON: {e}"}
+    except Exception as e:
+        print(f"❌ Error processing push message: {e}")
+        print(f"❌ Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def main():
