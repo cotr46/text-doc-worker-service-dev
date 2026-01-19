@@ -162,19 +162,15 @@ class TextAnalysisProcessor:
                                 entity_type: str, additional_context: Optional[str] = None) -> Dict:
         """Call text analysis AI model"""
         try:
-            # Format prompt
-            prompt = self.model_client.format_analysis_request(
-                name=name,
-                analysis_type=analysis_type,
-                entity_type=entity_type,
-                additional_context=additional_context
-            )
+            # Use simple name-only prompt (model has built-in instructions)
+            prompt = name
+            if additional_context:
+                prompt = f"{name}\n\nContext: {additional_context}"
             
             # Call model (no temperature parameter - model doesn't support it)
             response = self.model_client.call_model(
                 model_name=model_name,
-                prompt=prompt,
-                max_tokens=2000
+                prompt=prompt
             )
             
             self.log(f"✅ Model response received in {response.response_time:.2f}s")
