@@ -937,13 +937,12 @@ class UltraFastPDFProcessor:
                 "Content-Type": "application/json",
             }
 
-            # ULTRA-FAST payload dengan reduced tokens
+            # Payload tanpa konfigurasi tambahan - biarkan model gunakan default
             payload = {
                 "model": self.model,
                 "messages": [{"role": "user", "content": content}],
-                "stream": False,
-                "max_tokens": 4000,  # 8000→4000 untuk faster response
-                "temperature": 0.1,
+                "stream": False
+                # No temperature, max_tokens - use model defaults
             }
             
             response = requests.post(url, headers=headers, json=payload, timeout=self.timeout_seconds)

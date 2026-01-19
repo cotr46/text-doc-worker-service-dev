@@ -441,13 +441,13 @@ class TextModelClient:
         try:
             self.log(f"🔍 Checking availability of model: {model_name}")
             
-            # Make a simple test call with minimal tokens to reduce cost
+            # Make a simple test call - no extra parameters
+            # Let model use its default settings
             test_prompt = "Test"
             response = self.call_model(
                 model_name=model_name,
-                prompt=test_prompt,
-                max_tokens=5,  # Minimal tokens for availability check
-                temperature=0.1
+                prompt=test_prompt
+                # No temperature, max_tokens - use model defaults
             )
             
             # If we get a response, the model is available

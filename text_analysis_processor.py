@@ -242,11 +242,12 @@ class TextAnalysisProcessor:
             )
             
             # Call the model using the client
+            # NOTE: Don't pass temperature/max_tokens - reasoning models don't support them
+            # Let the model use its default settings
             response = self.model_client.call_model(
                 model_name=model_name,
-                prompt=prompt,
-                temperature=0.1,  # Low temperature for consistent results
-                max_tokens=2000
+                prompt=prompt
+                # temperature and max_tokens removed - reasoning models use defaults
             )
             
             self.log(f"✅ Model response received via client")
