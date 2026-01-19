@@ -22,6 +22,7 @@ class ModelResponse:
     response_time: float
     status_code: int
     raw_response: Dict[str, Any]
+    sources: List[Dict[str, Any]] = None  # Sources from tool execution (e.g., web search results)
 
 
 class TextModelClient:
@@ -158,10 +159,18 @@ class TextModelClient:
                         "content": prompt
                     }
                 ],
-                "temperature": kwargs.get("temperature", 0.1),
-                "max_tokens": kwargs.get("max_tokens", 2000),
-                "stream": kwargs.get("stream", False)
+                "stream": kwargs.get("stream", False),
+                # CRITICAL: Add tool_ids for web search capability
+                "tool_ids": kwargs.get("tool_ids", ["web_search_with_google"])
             }
+            
+            # Add temperature only if explicitly provided (let model use default)
+            if "temperature" in kwargs:
+                payload["temperature"] = kwargs["temperature"]
+            
+            # Add max_tokens only if explicitly provided (avoid truncation)
+            if "max_tokens" in kwargs:
+                payload["max_tokens"] = kwargs["max_tokens"]
             
             # Prepare headers
             headers = {
@@ -176,6 +185,7 @@ class TextModelClient:
                 self.log(f"   - Prompt length: {len(prompt)} characters")
                 self.log(f"   - Temperature: {payload['temperature']}")
                 self.log(f"   - Max tokens: {payload['max_tokens']}")
+                self.log(f"   - Tool IDs: {payload.get('tool_ids', 'None')}")
             else:
                 self.log(f"📤 Retry attempt {attempt + 1} for model: {model_name}")
             
@@ -216,6 +226,28 @@ class TextModelClient:
                 self.log(f"❌ {error_msg}")
                 raise Exception(error_msg)
             
+            # Extract sources if present (from tool execution)
+            sources = response_data.get("sources", [])
+            if sources:
+                self.log(f"📚 Found {len(sources)} source(s) from tool execution")
+                for i, source in enumerate(sources[:3]):  # Log first 3 sources
+                    source_name = source.get("source", {}).get("name", "unknown")
+                    self.log(f"   - Source {i+1}: {source_name}")
+            
+            # CRITICAL: Check for reasoning token limit truncation
+            usage = response_data.get("usage", {})
+            completion_details = usage.get("completion_tokens_details", {})
+            reasoning_tokens = completion_details.get("reasoning_tokens", 0)
+            
+            # If reasoning tokens is exactly 2000, model likely hit reasoning limit
+            if reasoning_tokens == 2000:
+                self.log(f"⚠️ WARNING: Reasoning tokens = 2000 (likely hit limit)")
+                self.log(f"   - This may cause truncated/empty response")
+                self.log(f"   - Model may have stopped mid-reasoning")
+                
+                # Check if content is empty - this indicates the limit was actually hit
+                # We'll validate this after extracting content below
+            
             # Validate response structure
             if "choices" not in response_data or not response_data["choices"]:
                 error_msg = f"Invalid model response: no choices returned. Response: {json.dumps(response_data)[:200]}"
@@ -224,12 +256,58 @@ class TextModelClient:
             
             # Extract content from response
             choice = response_data["choices"][0]
-            if "message" not in choice or "content" not in choice["message"]:
-                error_msg = f"Invalid model response: no message content. Choice: {json.dumps(choice)[:200]}"
+            if "message" not in choice:
+                error_msg = f"Invalid model response: no message in choice. Choice: {json.dumps(choice)[:200]}"
                 self.log(f"❌ {error_msg}")
                 raise Exception(error_msg)
             
-            content = choice["message"]["content"]
+            message = choice["message"]
+            
+            # Check for tool_calls (function calling scenario)
+            if "tool_calls" in message and message["tool_calls"]:
+                self.log(f"⚠️ Model returned tool_calls (function calling mode)")
+                self.log(f"   - Tool calls count: {len(message['tool_calls'])}")
+                for i, tool_call in enumerate(message["tool_calls"]):
+                    self.log(f"   - Tool {i+1}: {tool_call.get('function', {}).get('name', 'unknown')}")
+                # For now, log warning - this needs multi-turn conversation to handle properly
+                self.log(f"⚠️ WARNING: Tool calls require multi-turn conversation - not yet implemented")
+            
+            # Get content (might be empty if tool_calls present)
+            content = message.get("content", "")
+            
+            # CRITICAL: Validate content is not empty (unless tool_calls present)
+            if not content or content.strip() == "":
+                self.log(f"⚠️ WARNING: Model returned empty content")
+                self.log(f"   - Message keys: {list(message.keys())}")
+                self.log(f"   - Finish reason: {choice.get('finish_reason', 'unknown')}")
+                self.log(f"   - Reasoning tokens: {reasoning_tokens}")
+                
+                # Check if this is due to reasoning token limit
+                if reasoning_tokens >= 2000:
+                    error_msg = (
+                        f"CRITICAL: Model hit reasoning token limit ({reasoning_tokens} tokens). "
+                        f"The model stopped mid-reasoning and returned empty content. "
+                        f"This is a Nexus API limitation. "
+                        f"Recommendations: "
+                        f"1) Contact Nexus API provider to increase reasoning token limit, "
+                        f"2) Simplify the prompt, "
+                        f"3) Use a model without reasoning mode."
+                    )
+                    self.log(f"❌ {error_msg}")
+                    # CRITICAL: Raise exception to mark job as failed
+                    raise Exception(error_msg)
+                
+                # If no tool_calls and no reasoning limit, this is unexpected
+                if "tool_calls" not in message or not message["tool_calls"]:
+                    error_msg = (
+                        f"Model returned empty content without tool_calls or reasoning limit. "
+                        f"Finish reason: {choice.get('finish_reason', 'unknown')}. "
+                        f"This is unexpected behavior."
+                    )
+                    self.log(f"❌ {error_msg}")
+                    # CRITICAL: Raise exception to mark job as failed
+                    raise Exception(error_msg)
+            
             usage = response_data.get("usage", {})
             
             if attempt == 0:
@@ -246,7 +324,8 @@ class TextModelClient:
                 usage=usage,
                 response_time=response_time,
                 status_code=response.status_code,
-                raw_response=response_data
+                raw_response=response_data,
+                sources=sources  # Include sources from tool execution
             )
             
         except requests.exceptions.Timeout:
