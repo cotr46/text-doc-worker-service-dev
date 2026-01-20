@@ -31,7 +31,7 @@ class TextModelClient:
         """Initialize client"""
         self.api_key = config.get("api_key")
         self.base_url = config.get("base_url")
-        self.timeout_seconds = config.get("timeout_seconds", 180)  # Increased to 180s for Google search
+        self.timeout_seconds = config.get("timeout_seconds", 300)  # Increased to 300s for PEP analysis with Google search
         self.enable_logging = config.get("enable_logging", True)
         self.max_retries = config.get("max_retries", 3)
         self.retry_delay = config.get("retry_delay", 1)

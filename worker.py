@@ -49,7 +49,7 @@ class TextAnalysisWorker:
         self.text_processor_config = {
             "api_key": os.getenv("TEXT_MODEL_API_KEY", "sk-c2ebcb8d36aa4361a28560915d8ab6f2"),
             "base_url": os.getenv("TEXT_MODEL_BASE_URL", "https://nexus-bnimove-369455734154.asia-southeast2.run.app"),
-            "timeout_seconds": int(os.getenv("TEXT_MODEL_TIMEOUT", "180")),
+            "timeout_seconds": int(os.getenv("TEXT_MODEL_TIMEOUT", "300")),
             "enable_logging": True,
             "max_retries": 3,
             "retry_delay": 1,
