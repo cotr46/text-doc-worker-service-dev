@@ -198,7 +198,6 @@ class TextAnalysisProcessor:
                 "entity_type": entity_type,
                 "entity_name": name,
                 "model_used": model_name,
-                "confidence_score": self.extract_confidence_score(parsed_result),
                 "findings": {
                     "status": self.extract_status(parsed_result),
                     "summary": self.extract_summary(parsed_result),
@@ -243,16 +242,6 @@ class TextAnalysisProcessor:
                 except json.JSONDecodeError:
                     continue
             return {}
-
-    def extract_confidence_score(self, parsed_result: Dict) -> Optional[float]:
-        """Extract confidence score"""
-        for field in ["confidence", "confidence_score", "certainty"]:
-            if field in parsed_result:
-                try:
-                    return float(parsed_result[field])
-                except (ValueError, TypeError):
-                    continue
-        return None
 
     def extract_status(self, parsed_result: Dict) -> str:
         """Extract status from result"""
