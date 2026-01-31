@@ -22,7 +22,7 @@ steps:
     id: 'push-latest'
     waitFor: ['build']
 
-  # Deploy to Cloud Run with VPC Connector
+  # Deploy to Cloud Run with VPC Connector and Secret Manager
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     args: [
       'gcloud', 'run', 'deploy', 'text-analysis-worker-service-vpc-test',
@@ -32,7 +32,7 @@ steps:
       '--allow-unauthenticated',
       '--vpc-connector=text-analysis-connector',
       '--vpc-egress=all-traffic',
-      '--set-env-vars=GOOGLE_CLOUD_PROJECT=$PROJECT_ID,PUBSUB_SUBSCRIPTION=text-analysis-worker-vpc-test,FIRESTORE_DATABASE=text-analysis-firestore-vpc-test,TEXT_MODEL_BASE_URL=https://nexus-bnimove-369455734154.asia-southeast2.run.app'
+      '--set-secrets=GOOGLE_CLOUD_PROJECT=gcp-project-id:latest,PUBSUB_SUBSCRIPTION=pubsub-subscription-worker:latest,FIRESTORE_DATABASE=firestore-database-name:latest,TEXT_MODEL_BASE_URL=nexus-base-url:latest,NEXUS_API_KEY=nexus-api-key:latest'
     ]
     id: 'deploy'
     waitFor: ['push']
