@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
 
 from text_model_client import TextModelClient
+from model_armor_client import get_model_armor_client
 
 
 class TextAnalysisProcessor:
@@ -175,12 +176,26 @@ class TextAnalysisProcessor:
             
             self.log(f"✅ Model response received in {response.response_time:.2f}s")
             
+            # Model Armor: Sanitize response for harmful content, malicious URLs, PII
+            model_armor = get_model_armor_client()
+            armor_result = model_armor.sanitize_response(response.content)
+            
+            if armor_result.blocked:
+                self.log(f"🛡️ Model Armor flagged response - using sanitized version")
+                self.log(f"   - Malicious URI: {armor_result.malicious_uri_detected}")
+                self.log(f"   - Sensitive Data: {armor_result.sensitive_data_detected}")
+            
+            # Use sanitized content if available
+            sanitized_content = armor_result.sanitized_content or response.content
+            
             return {
-                "content": response.content,
+                "content": sanitized_content,
                 "model": response.model,
                 "usage": response.usage,
                 "response_time": response.response_time,
-                "sources": response.sources
+                "sources": response.sources,
+                "armor_sanitized": armor_result.blocked,
+                "armor_latency_ms": armor_result.latency_ms
             }
             
         except Exception as e:

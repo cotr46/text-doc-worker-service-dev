@@ -35,20 +35,39 @@ class TextAnalysisWorker:
     
     def __init__(self):
         """Initialize text analysis worker"""
+
+        # Configuration - all values from Secret Manager (no hardcoded defaults)
+        self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
+        if not self.project_id:
+            raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required")
         
-        # Configuration
-        self.project_id = os.getenv("GOOGLE_CLOUD_PROJECT", "bni-prod-dma-bnimove-ai")
-        self.subscription_name = os.getenv("PUBSUB_SUBSCRIPTION", "text-analysis-worker")
-        self.firestore_database = os.getenv("FIRESTORE_DATABASE", "text-analysis-firestore")
+        self.subscription_name = os.getenv("PUBSUB_SUBSCRIPTION")
+        if not self.subscription_name:
+            raise ValueError("PUBSUB_SUBSCRIPTION environment variable is required")
+        
+        self.firestore_database = os.getenv("FIRESTORE_DATABASE")
+        if not self.firestore_database:
+            raise ValueError("FIRESTORE_DATABASE environment variable is required")
+        
         self.port = int(os.getenv("PORT", "8080"))
         
         # Worker settings
         self.max_workers = int(os.getenv("MAX_WORKERS", "16"))
         
         # Model API configuration
+        # NEXUS_API_KEY is mounted from Secret Manager, fallback to TEXT_MODEL_API_KEY for backward compatibility
+        api_key = os.getenv("NEXUS_API_KEY") or os.getenv("TEXT_MODEL_API_KEY")
+        if not api_key:
+            raise ValueError("NEXUS_API_KEY or TEXT_MODEL_API_KEY environment variable is required")
+        
+        # BASE_URL is mounted from Secret Manager via TEXT_MODEL_BASE_URL env var
+        base_url = os.getenv("TEXT_MODEL_BASE_URL")
+        if not base_url:
+            raise ValueError("TEXT_MODEL_BASE_URL environment variable is required")
+        
         self.text_processor_config = {
-            "api_key": os.getenv("TEXT_MODEL_API_KEY", "sk-c2ebcb8d36aa4361a28560915d8ab6f2"),
-            "base_url": os.getenv("TEXT_MODEL_BASE_URL", "https://nexus-bnimove-369455734154.asia-southeast2.run.app"),
+            "api_key": api_key,
+            "base_url": base_url,
             "timeout_seconds": int(os.getenv("TEXT_MODEL_TIMEOUT", "300")),
             "enable_logging": True,
             "max_retries": 3,
